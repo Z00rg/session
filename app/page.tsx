@@ -1,65 +1,1910 @@
-import Image from "next/image";
+"use client";
 
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+
+/* ============================================================
+   Конструктор ИИ-трансформации СамГМУ — Модуль 2 (группа «Образование»)
+   Один самодостаточный клиентский компонент: 5 шагов, всё редактируется,
+   состояние сохраняется в localStorage. Стили инъектируются ниже, поэтому
+   компонент не зависит от конфигурации Tailwind проекта.
+   ============================================================ */
+
+// ---------- Типы ----------
+interface Module {
+  id: string;
+  name: string;
+  desc: string;
+}
+interface ChecklistItem {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+interface Project {
+  id: string;
+  name: string;
+  activities: string;
+  kpi: string;
+  type: "quick" | "strategic";
+  startQuarter: number;
+  duration: number;
+}
+interface SchemaLevel {
+  id: string;
+  title: string;
+  moduleIds: string[];
+}
+interface AppState {
+  step: number;
+  direction: string;
+  scenario: string;
+  initiative: string;
+  modules: Module[]; // сгенерированные + пользовательские
+  selectedIds: string[];
+  levels: SchemaLevel[];
+  resources: ChecklistItem[];
+  actions: ChecklistItem[];
+  projects: Project[];
+  theme: "dark" | "light";
+}
+
+// ---------- Справочники ----------
+const directionsMap: Record<
+    string,
+    { name: string; prep: string; domain: string; spec: string[] }
+> = {
+  education: {
+    name: "образования",
+    prep: "в университете",
+    domain: "учебный процесс",
+    spec: [
+      "Адаптивный тьютор",
+      "Граф компетенций",
+      "Автоматическая проверка работ",
+      "Анализ успеваемости",
+    ],
+  },
+  science: {
+    name: "науки",
+    prep: "в научных исследованиях",
+    domain: "R&D",
+    spec: [
+      "AlphaFold-подобная модель",
+      "Замкнутый R&D конвейер",
+      "Геномная языковая модель",
+      "Виртуальный скрининг",
+    ],
+  },
+  clinic: {
+    name: "клиники",
+    prep: "в клинической практике",
+    domain: "диагностика и лечение",
+    spec: [
+      "Диагностика КТ/МРТ с ИИ",
+      "Прогнозирование сепсиса",
+      "Клинический copilot",
+      "Голосовое заполнение карт",
+    ],
+  },
+  production: {
+    name: "производства",
+    prep: "на производстве",
+    domain: "выпуск медизделий",
+    spec: [
+      "Визуальный контроль качества",
+      "Предиктивное обслуживание станков",
+      "Генеративный дизайн имплантов",
+      "Цифровой двойник цеха",
+    ],
+  },
+  services: {
+    name: "управления",
+    prep: "в административной деятельности",
+    domain: "бизнес-процессы",
+    spec: [
+      "Агент планирования бюджета",
+      "HR-аналитика",
+      "ИИ-документооборот",
+      "Умная логистика",
+    ],
+  },
+};
+
+const scenarioMap: Record<string, { label: string; focus: string }> = {
+  digital_fortress: {
+    label: "Цифровая крепость",
+    focus: "безопасность, защита данных, импортозамещение",
+  },
+  smart_integrator: {
+    label: "Умный интегратор",
+    focus: "бесшовная интеграция, API-экономика, сквозные процессы",
+  },
+  tech_sovereign: {
+    label: "Технологический суверен",
+    focus: "собственные LLM, компьютерное зрение, R&D",
+  },
+  national_hub: {
+    label: "Национальный хаб",
+    focus: "масштабирование, экспорт решений, лидерство",
+  },
+};
+
+const QUARTERS = [
+  "Q1'24",
+  "Q2'24",
+  "Q3'24",
+  "Q4'24",
+  "Q1'25",
+  "Q2'25",
+  "Q3'25",
+  "Q4'25",
+  "Q1'26",
+  "Q2'26",
+  "Q3'26",
+  "Q4'26",
+];
+const QUARTER_WIDTH = 80;
+const STORAGE_KEY = "samgmu_ai_module2_v1";
+
+const LEVEL_NAMES = [
+  "Ядро",
+  "Мультиагентный слой",
+  "Аналитика и прогнозирование",
+  "Интеграция и интерфейсы",
+  "Пользователи и новые роли",
+  "Продукт",
+  "Бизнес-модель",
+];
+
+const uid = () =>
+    Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+// ---------- Генерация элементов образа будущего ----------
+function generateModules(
+    direction: string,
+    scenario: string,
+    initiative: string
+): Module[] {
+  const dir = directionsMap[direction] || directionsMap.education;
+  const modules: Module[] = [];
+
+  for (const spec of dir.spec)
+    modules.push({
+      id: `spec_${direction}_${spec.replace(/\s/g, "")}`,
+      name: spec,
+      desc: `Специализированное решение для ${dir.name}, автоматизирующее ключевые процессы.`,
+    });
+
+  if (direction === "education")
+    for (const m of EDUCATION_SEED) modules.push({ ...m });
+
+  const templates = [
+    "ИИ-агент для автоматизации рутины",
+    "Предиктивная аналитика",
+    "Интеллектуальный помощник на базе LLM",
+    "Граф знаний",
+    "Компьютерное зрение",
+    "Генеративный дизайн",
+    "Мультиагентная оркестрация",
+    "Цифровой двойник",
+    "Рекомендательная система",
+    "Обработка NLP",
+    "Автоматическая генерация контента",
+    "Риск-стратификация",
+    "Виртуальный ассистент",
+    "Предиктивное обслуживание",
+    "BI-аналитика",
+    "Голосовое управление",
+    "Платформа совместной работы",
+    "Агент планирования",
+    "Контроль качества с CV",
+    "Умный документооборот",
+    "Человек в контуре",
+    "Симулятор сложных ситуаций",
+  ];
+  templates.forEach((t, i) =>
+      modules.push({
+        id: `gen_${direction}_${i}`,
+        name: `${t} ${dir.prep}`,
+        desc: `Модуль для ${dir.name}, повышает эффективность.`,
+      })
+  );
+
+  if (scenario === "digital_fortress")
+    modules.push({
+      id: "sc_fortress",
+      name: "Система ИИ-безопасности и мониторинга инцидентов",
+      desc: "Обнаружение аномалий, защита моделей, аудит решений.",
+    });
+  if (scenario === "smart_integrator")
+    modules.push({
+      id: "sc_integrator",
+      name: "Единая шина интеграции ИИ-сервисов (API Gateway)",
+      desc: "Оркестрация вызовов, маршрутизация, кэширование.",
+    });
+  if (scenario === "tech_sovereign")
+    modules.push({
+      id: "sc_sovereign",
+      name: "Фабрика собственных LLM и CV-моделей",
+      desc: "Обучение и дообучение на отраслевых данных.",
+    });
+  if (scenario === "national_hub")
+    modules.push({
+      id: "sc_hub",
+      name: "Платформа тиражирования ИИ-решений для медорганизаций",
+      desc: "Магазин моделей, лицензирование, удалённое развёртывание.",
+    });
+
+  if (initiative && initiative.trim() !== "") {
+    const t = initiative.toLowerCase();
+    if (
+        t.includes("диагностик") ||
+        t.includes("клиник") ||
+        t.includes("врач") ||
+        t.includes("лечени")
+    ) {
+      modules.push({
+        id: "init_diag",
+        name: "Система поддержки клинических решений",
+        desc: "Помощь врачам в диагностике и выборе тактики лечения на основе ИИ.",
+      });
+      modules.push({
+        id: "init_anal",
+        name: "Медицинская аналитическая платформа",
+        desc: "Анализ историй болезней, выявление паттернов и рисков.",
+      });
+    }
+    if (
+        t.includes("образован") ||
+        t.includes("учебн") ||
+        t.includes("студент") ||
+        t.includes("курс") ||
+        t.includes("обучени")
+    ) {
+      modules.push({
+        id: "init_edu",
+        name: "Адаптивная образовательная среда",
+        desc: "Персонализация траекторий обучения на основе успеваемости и интересов.",
+      });
+      modules.push({
+        id: "init_sim",
+        name: "Виртуальный тренажёр для отработки навыков",
+        desc: "Симуляция реальных ситуаций для студентов и сотрудников.",
+      });
+    }
+    if (
+        t.includes("производств") ||
+        t.includes("станк") ||
+        t.includes("качеств") ||
+        t.includes("брак")
+    ) {
+      modules.push({
+        id: "init_qual",
+        name: "Интеллектуальный контроль качества",
+        desc: "Автоматическое обнаружение дефектов продукции с помощью компьютерного зрения.",
+      });
+      modules.push({
+        id: "init_pred",
+        name: "Предиктивная аналитика оборудования",
+        desc: "Прогнозирование отказов и оптимизация ТО.",
+      });
+    }
+    if (
+        t.includes("бюджет") ||
+        t.includes("логистик") ||
+        t.includes("закупк") ||
+        t.includes("документ")
+    ) {
+      modules.push({
+        id: "init_budget",
+        name: "ИИ-агент планирования ресурсов",
+        desc: "Автоматизация бюджетных процессов и логистики.",
+      });
+      modules.push({
+        id: "init_doc",
+        name: "Умный документооборот",
+        desc: "Классификация, извлечение данных и маршрутизация документов.",
+      });
+    }
+    if (
+        t.includes("наук") ||
+        t.includes("исследован") ||
+        t.includes("r&d") ||
+        t.includes("лаборатор")
+    ) {
+      modules.push({
+        id: "init_sci",
+        name: "Научный ассистент на основе LLM",
+        desc: "Анализ литературы, генерация гипотез, автоматизация экспериментов.",
+      });
+    }
+    modules.push({
+      id: "init_dash",
+      name: "Система мониторинга KPI инициативы",
+      desc: "Дашборды для отслеживания прогресса ключевой инициативы.",
+    });
+    modules.push({
+      id: "init_orch",
+      name: "Оркестратор процессов инициативы",
+      desc: "Координация работ и ресурсов в рамках флагманского проекта.",
+    });
+  }
+
+  const unique = new Map<string, Module>();
+  for (const m of modules) if (!unique.has(m.id)) unique.set(m.id, m);
+  const finalModules = Array.from(unique.values());
+  while (finalModules.length < 22)
+    finalModules.push({
+      id: `extra_${uid()}`,
+      name: `Интеграционный модуль ${dir.name}`,
+      desc: `Гибкое решение для задач ${dir.name}.`,
+    });
+  return finalModules;
+}
+
+// ---------- Распределение по слоям (роутинг по ключевым словам) ----------
+function levelForModule(m: Module): string {
+  const txt = (m.name + " " + m.desc).toLowerCase();
+  if (
+      txt.includes("агент") ||
+      txt.includes("ассистент") ||
+      txt.includes("тьютор") ||
+      txt.includes("copilot")
+  )
+    return "Мультиагентный слой";
+  if (
+      txt.includes("аналитик") ||
+      txt.includes("прогноз") ||
+      txt.includes("bi") ||
+      txt.includes("предиктивн") ||
+      txt.includes("риск")
+  )
+    return "Аналитика и прогнозирование";
+  if (
+      txt.includes("интеграц") ||
+      txt.includes("api") ||
+      txt.includes("интерфейс") ||
+      txt.includes("портал")
+  )
+    return "Интеграция и интерфейсы";
+  if (
+      txt.includes("пользовател") ||
+      txt.includes("роль") ||
+      txt.includes("сотрудник") ||
+      txt.includes("врач") ||
+      txt.includes("студент")
+  )
+    return "Пользователи и новые роли";
+  if (
+      txt.includes("продукт") ||
+      txt.includes("услуг") ||
+      txt.includes("сервис")
+  )
+    return "Продукт";
+  if (
+      txt.includes("бизнес") ||
+      txt.includes("kpi") ||
+      txt.includes("эффективн") ||
+      txt.includes("окупаемост")
+  )
+    return "Бизнес-модель";
+  return "Ядро";
+}
+
+function buildLevels(
+    selected: Module[],
+    prev?: SchemaLevel[]
+): SchemaLevel[] {
+  // Сохраняем ручные перестановки: если модуль уже размещён — оставляем его уровень.
+  const placed = new Map<string, string>();
+  prev?.forEach((lvl) =>
+      lvl.moduleIds.forEach((mid) => placed.set(mid, lvl.title))
+  );
+
+  const base: SchemaLevel[] =
+      prev && prev.length
+          ? prev.map((l) => ({ ...l, moduleIds: [] }))
+          : LEVEL_NAMES.map((title) => ({ id: uid(), title, moduleIds: [] }));
+
+  const byTitle = new Map(base.map((l) => [l.title, l]));
+
+  for (const m of selected) {
+    const target = placed.get(m.id) || levelForModule(m);
+    const lvl = byTitle.get(target) || base[0];
+    lvl.moduleIds.push(m.id);
+  }
+  return base;
+}
+
+function deriveTechStack(selected: Module[]): string[] {
+  const txt = selected.map((m) => (m.name + " " + m.desc).toLowerCase()).join(" ");
+  const stack = new Set<string>(["MLOps", "Облачная инфраструктура"]);
+  if (txt.includes("llm") || txt.includes("помощник") || txt.includes("nlp") || txt.includes("ассистент"))
+    stack.add("LLM / NLP");
+  if (txt.includes("зрени") || txt.includes("cv") || txt.includes("изображ"))
+    stack.add("Компьютерное зрение");
+  if (txt.includes("прогноз") || txt.includes("аналитик") || txt.includes("предиктив"))
+    stack.add("Предиктивная аналитика");
+  if (txt.includes("граф")) stack.add("Графовые базы знаний");
+  if (txt.includes("агент") || txt.includes("оркестр"))
+    stack.add("Мультиагентная оркестрация");
+  if (txt.includes("двойник")) stack.add("Цифровые двойники");
+  return Array.from(stack);
+}
+
+// ---------- Чек-листы ----------
+function generateChecklists(
+    selected: Module[],
+    direction: string,
+    scenario: string,
+    initiative: string
+): { resources: ChecklistItem[]; actions: ChecklistItem[] } {
+  const baseResources = [
+    "Выделенный GPU-кластер или облачные вычислительные мощности",
+    "Интегрированное хранилище данных (Data Lake / Lakehouse)",
+    "Лицензионное ПО для разработки и развёртывания ИИ-моделей",
+    "Команда Data Scientist и ML-инженеров (не менее 3 специалистов)",
+    "Политики управления данными и соответствия регуляторным требованиям",
+    "Размеченные отраслевые датасеты (медицинские, образовательные и пр.)",
+    "Инфраструктура MLOps (мониторинг, версионирование, CI/CD для моделей)",
+    "Защищённая среда для обработки персональных данных",
+    "Бюджет на пилотные внедрения и масштабирование",
+    "Система мониторинга дрейфа моделей и качества предсказаний",
+    "Партнёрские соглашения с технологическими вендорами",
+    "Методологическая база для оценки экономической эффективности ИИ",
+    "Интеграционные шины для связи с системами (ERP, LMS, МИС)",
+    "Система управления инцидентами и обратной связью по ИИ",
+  ];
+  const baseActions = [
+    "Провести аудит текущего ИТ-ландшафта и качества данных",
+    "Разработать регламенты взаимодействия ИИ-агентов с сотрудниками",
+    "Обучить профильных специалистов работе с ИИ-инструментами",
+    "Сформировать центр компетенций по ИИ и аналитике данных",
+    "Разработать и внедрить стандарты качества и полноты данных",
+    "Провести пилотные испытания на изолированном контуре",
+    "Создать дорожную карту ИИ-проектов и рассчитать ROI",
+    "Интегрировать ИИ-модули с корпоративными системами (МИС, LMS, ERP)",
+    "Разработать политики кибербезопасности для ИИ-систем",
+    "Настроить непрерывный сбор обратной связи от пользователей",
+    "Организовать регулярную переподготовку моделей на новых данных",
+    "Подготовить план масштабирования успешных пилотов",
+    "Внедрить этическую экспертизу ИИ-решений в критических процессах",
+    "Создать систему управления знаниями на графовых базах данных",
+  ];
+
+  const eduResources =
+      direction === "education"
+          ? [
+            "Политика использования ИИ в образовании (этика, безопасность, ответственность)",
+            "База знаний обучающих материалов и собственные образовательные датасеты",
+            "Программа аккредитации ППС по ИИ-компетенциям",
+            "Бюджет на LLM-токены и безопасный контур обучения",
+          ]
+          : [];
+  const eduActions =
+      direction === "education"
+          ? [
+            "Разработать политику использования ИИ: этика, безопасность, ответственность",
+            "Запустить пилот адаптивного обучения и ИИ-симуляции на одной кафедре",
+            "Ввести аккредитацию ППС по ИИ-компетенциям и привязать к KPI",
+            "Создать базу знаний обучающих материалов как основу для обучения моделей",
+            "Назначить цифровых кураторов для ППС старшего поколения",
+          ]
+          : [];
+  const resources = [...eduResources, ...baseResources];
+  const actions = [...eduActions, ...baseActions];
+  const texts = selected
+      .map((m) => (m.name + " " + m.desc).toLowerCase())
+      .join(" ");
+
+  if (texts.includes("зрени") || direction === "clinic") {
+    resources.push("Размеченные медицинские изображения (КТ, МРТ, рентген)");
+    actions.push("Провести разметку не менее 10 000 изображений с экспертами");
+  }
+  if (texts.includes("агент") || texts.includes("ассистент")) {
+    resources.push("Платформа для оркестрации мультиагентных систем");
+    actions.push("Разработать регламенты совместной работы человека и ИИ-агентов");
+  }
+  if (scenario === "digital_fortress") {
+    resources.push("Сертифицированные средства криптографической защиты");
+    actions.push("Провести аттестацию ИИ-систем на соответствие требованиям ИБ");
+  }
+  if (scenario === "smart_integrator") {
+    resources.push("Промышленная шина данных (ESB / Data Fabric)");
+    actions.push("Разработать стандарты открытых API для всех модулей");
+  }
+  if (scenario === "tech_sovereign") {
+    resources.push("Выделенный R&D-полигон для обучения моделей");
+    actions.push("Организовать репозиторий собственных предобученных моделей");
+  }
+  if (scenario === "national_hub") {
+    resources.push("Маркетплейс ИИ-решений");
+    actions.push("Разработать программу акселерации для внешних команд");
+  }
+  if (initiative && initiative.trim() !== "") {
+    resources.push("Ресурсы для флагманской инициативы: " + initiative.slice(0, 50));
+    actions.push(
+        "Развернуть пилотный проект «" + initiative.slice(0, 60) + "» с KPI"
+    );
+  }
+
+  const toItems = (arr: string[]) =>
+      arr.slice(0, 16).map((text) => ({ id: uid(), text, checked: false }));
+  const resItems = toItems(resources);
+  const actItems = toItems(actions);
+  while (resItems.length < 12)
+    resItems.push({
+      id: uid(),
+      text: "Дополнительный ресурс: вычислительная инфраструктура и лицензии",
+      checked: false,
+    });
+  while (actItems.length < 12)
+    actItems.push({
+      id: uid(),
+      text: "Дополнительное действие: стратегическая сессия по ИИ-трансформации",
+      checked: false,
+    });
+  return { resources: resItems, actions: actItems };
+}
+
+// ---------- Проекты ----------
+function generateProjects(
+    resources: ChecklistItem[],
+    actions: ChecklistItem[],
+    direction: string,
+    scenario: string
+): Project[] {
+  let quick: string[] = [];
+  resources.forEach((r) =>
+      quick.push(r.checked ? `Пилот внедрения: ${r.text}` : `Создание / приобретение: ${r.text}`)
+  );
+  actions.forEach((a) =>
+      quick.push(a.checked ? `Ускоренное выполнение: ${a.text}` : `Реализация действия: ${a.text}`)
+  );
+  quick = Array.from(new Set(quick)).slice(0, 6);
+  if (direction === "education") {
+    quick = Array.from(
+        new Set([
+          "Политика использования ИИ (этика, безопасность, ответственность)",
+          "Пилот адаптивного обучения и ИИ-симуляции на одной кафедре",
+          "Аккредитация ППС по ИИ-компетенциям с привязкой к KPI",
+          "База знаний обучающих материалов и образовательные датасеты",
+          ...quick,
+        ])
+    ).slice(0, 7);
+  }
+
+  const strategicBase = [
+    "Платформа предиктивной аналитики",
+    "Мультиагентная оркестрация процессов",
+    "Центр компетенций ИИ",
+    "Система управления ИИ-активами",
+  ];
+  const dirStrategic: Record<string, string> = {
+    education: "Университетская аналитика компетенций",
+    science: "Платформа виртуального скрининга",
+    clinic: "Система поддержки врачебных решений",
+    production: "Полный цифровой двойник производства",
+    services: "Интеллектуальная система управления закупками",
+  };
+  const scenarioStrategic: Record<string, string> = {
+    digital_fortress: "Национальный центр ИИ-безопасности в здравоохранении",
+    smart_integrator: "Единая цифровая платформа СамГМУ (Smart Health Ecosystem)",
+    tech_sovereign: "Фабрика медицинских ИИ-моделей с открытым кодом",
+    national_hub: "Экспортный хаб российских медицинских ИИ-решений",
+  };
+  const eduStrategic =
+      direction === "education"
+          ? [
+            "Первый медицинский AI-native университет (переход к AI OS)",
+            "100% ППС обучены и аккредитованы по ИИ-компетенциям (2031)",
+            "70% программ с ИИ-элементами; адаптивные траектории для 100% студентов",
+          ]
+          : [];
+  const strategic = [
+    ...eduStrategic,
+    ...strategicBase,
+    dirStrategic[direction] || "Стратегическая ИИ-платформа",
+    scenarioStrategic[scenario] || "",
+  ].filter(Boolean);
+
+  return [
+    ...quick.map((name, i) => ({
+      id: `quick_${uid()}`,
+      name,
+      activities: "Реализация в ближайшие кварталы",
+      kpi: "Эффективность +15–30%",
+      type: "quick" as const,
+      startQuarter: Math.min(i, 11),
+      duration: 2,
+    })),
+    ...strategic.map((name, i) => ({
+      id: `strat_${uid()}`,
+      name,
+      activities: "Системная трансформация, масштабирование",
+      kpi: "ROI >200% за 3 года",
+      type: "strategic" as const,
+      startQuarter: Math.min(4 + i, 11),
+      duration: 4,
+    })),
+  ];
+}
+
+// ============================================================
+//  Начальное состояние
+// ============================================================
+const INITIATIVE_DEFAULT =
+    "Трансформация образовательных процессов на основе ИИ — первый медицинский AI-native университет: 100% ППС обучены и аккредитованы по ИИ-компетенциям, 70% программ содержат ИИ-элементы, адаптивные траектории и цифровой профиль для 100% студентов, ИИ-симуляции и база знаний обучающих материалов.";
+
+// Итоги Модуля 1 группы «Образование» (для справочной карточки на шаге 1)
+const MODULE1 = {
+  scenario: "Национальный хаб (гибрид: внешние мощности + партнёры → наращивание собственных компетенций)",
+  vision: "«Первый медицинский AI-native университет» — адаптивное образование, интеграция клиники и науки",
+  smart:
+      "Трансформация образовательных процессов на основе ИИ: 100% ППС обучены и аккредитованы по ИИ-компетенциям, 70% программ содержат ИИ-элементы, адаптивные траектории для 100% студентов (цифровой профиль).",
+  roadmap: [
+    "Год 1 — политика использования ИИ + пилотная e-симуляция",
+    "Год 2 — актуализация 30% программ, ИИ-агенты для ППС",
+    "Год 5 (2031) — 100% ППС обучены, полное адаптивное обучение, переход к AI OS",
+  ],
+  roles: [
+    "Разработчик ИИ-агентов",
+    "Фасилитатор",
+    "Создатель мультимодального контента",
+  ],
+  barriers: [
+    "Из ~900 обученных ППС ИИ активно используют <1%",
+    "Стоимость LLM-токенов и безопасного контура",
+    "Риск «галлюцинаций» в медобразовании",
+    "Сопротивление ППС старшего поколения",
+  ],
+  proposals: [
+    "Разработать политику использования ИИ: этика, безопасность, ответственность",
+    "Запустить пилот адаптивного обучения и ИИ-симуляции на одной кафедре",
+    "Ввести аккредитацию ППС по ИИ-компетенциям, привязать к KPI",
+    "Создать базу знаний обучающих материалов как основу для обучения моделей",
+  ],
+};
+
+// Элементы образа будущего, выведенные из итогов Модуля 1 группы «Образование»
+const EDUCATION_SEED: Module[] = [
+  { id: "edu_adaptive", name: "Адаптивные траектории обучения", desc: "Персональные маршруты на основе цифрового профиля студента." },
+  { id: "edu_profile", name: "Цифровой профиль студента", desc: "Сбор и анализ данных об успеваемости, компетенциях и активности." },
+  { id: "edu_sim", name: "ИИ-симуляции клинических случаев", desc: "Виртуальные тренажёры и e-симуляции для отработки навыков." },
+  { id: "edu_competence", name: "Граф компетенций", desc: "Карта связей дисциплин, навыков и образовательных результатов." },
+  { id: "edu_autocheck", name: "Автоматическая проверка работ", desc: "ИИ-оценивание заданий с обратной связью студенту." },
+  { id: "edu_fgos", name: "Актуализация программ под ФГОС", desc: "ИИ-помощь в обновлении содержания программ и РПД." },
+  { id: "edu_kb", name: "База знаний обучающих материалов", desc: "Единый репозиторий контента как основа для обучения моделей." },
+  { id: "edu_ppsagent", name: "ИИ-агенты для ППС", desc: "Помощники преподавателя: подготовка и мультимодальный контент." },
+  { id: "edu_accred", name: "Аккредитация ППС по ИИ-компетенциям", desc: "Программа обучения и аттестации преподавателей, привязка к KPI." },
+  { id: "edu_tutor", name: "Адаптивный ИИ-тьютор", desc: "Персональные консультации и первичная поддержка 24/7." },
+  { id: "edu_curator", name: "Цифровые кураторы для ППС", desc: "Сопровождение старшего поколения, снижение сопротивления внедрению." },
+  { id: "edu_safebox", name: "Безопасный контур (старт на open-source LLM)", desc: "Изолированная среда для некритичных задач, контроль галлюцинаций." },
+];
+
+function freshState(): AppState {
+  const direction = "education";
+  const scenario = "national_hub";
+  const initiative = INITIATIVE_DEFAULT;
+  return {
+    step: 1,
+    direction,
+    scenario,
+    initiative,
+    modules: generateModules(direction, scenario, initiative),
+    selectedIds: [],
+    levels: [],
+    resources: [],
+    actions: [],
+    projects: [],
+    theme: "light",
+  };
+}
+
+// ============================================================
+//  Компонент
+// ============================================================
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+  const [state, setState] = useState<AppState>(freshState);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Облачная синхронизация (общий код группы)
+  const [cloudCode, setCloudCode] = useState("");
+  const [cloudStatus, setCloudStatus] = useState("");
+  const [cloudLinked, setCloudLinked] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Загрузка из localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as AppState;
+        setState({ ...freshState(), ...parsed });
+      }
+      const code = localStorage.getItem("samgmu_cloud_code");
+      if (code) setCloudCode(code);
+    } catch {
+      /* ignore */
+    }
+    setHydrated(true);
+  }, []);
+
+  // Сохранение в localStorage
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      /* ignore */
+    }
+  }, [state, hydrated]);
+
+  // Запоминаем код группы
+  useEffect(() => {
+    if (hydrated) localStorage.setItem("samgmu_cloud_code", cloudCode);
+  }, [cloudCode, hydrated]);
+
+  const patch = useCallback(
+      (p: Partial<AppState>) => setState((s) => ({ ...s, ...p })),
+      []
+  );
+
+  const moduleById = useCallback(
+      (id: string) => state.modules.find((m) => m.id === id),
+      [state.modules]
+  );
+  const selectedModules = state.modules.filter((m) =>
+      state.selectedIds.includes(m.id)
+  );
+
+  // ---------- Переходы между шагами ----------
+  const goStep = (step: number) => patch({ step });
+
+  const startFromContext = () => {
+    const modules = generateModules(
+        state.direction,
+        state.scenario,
+        state.initiative
+    );
+    // сохраняем выбор, который ещё существует
+    const ids = new Set(modules.map((m) => m.id));
+    patch({
+      modules,
+      selectedIds: state.selectedIds.filter((id) => ids.has(id)),
+      step: 2,
+    });
+  };
+
+  const buildSchema = () => {
+    if (state.selectedIds.length === 0) {
+      alert("Сначала выберите хотя бы один элемент.");
+      return;
+    }
+    patch({ levels: buildLevels(selectedModules, state.levels) });
+  };
+
+  const goReadiness = () => {
+    if (state.selectedIds.length === 0) {
+      alert("Выберите элементы образа будущего.");
+      return;
+    }
+    const next: Partial<AppState> = { step: 3 };
+    if (state.resources.length === 0 && state.actions.length === 0) {
+      const { resources, actions } = generateChecklists(
+          selectedModules,
+          state.direction,
+          state.scenario,
+          state.initiative
+      );
+      next.resources = resources;
+      next.actions = actions;
+    }
+    patch(next);
+  };
+
+  const makeProjects = () => {
+    patch({
+      projects: generateProjects(
+          state.resources,
+          state.actions,
+          state.direction,
+          state.scenario
+      ),
+    });
+  };
+
+  // ---------- Действия с модулями ----------
+  const toggleModule = (id: string) =>
+      setState((s) => ({
+        ...s,
+        selectedIds: s.selectedIds.includes(id)
+            ? s.selectedIds.filter((x) => x !== id)
+            : [...s.selectedIds, id],
+      }));
+
+  const [customName, setCustomName] = useState("");
+  const [customDesc, setCustomDesc] = useState("");
+  const addCustomModule = () => {
+    const name = customName.trim();
+    if (!name) return;
+    const m: Module = {
+      id: "cust_" + uid(),
+      name,
+      desc: customDesc.trim() || "Пользовательский элемент",
+    };
+    setState((s) => ({
+      ...s,
+      modules: [...s.modules, m],
+      selectedIds: [...s.selectedIds, m.id],
+    }));
+    setCustomName("");
+    setCustomDesc("");
+  };
+
+  // ---------- Схема: уровни ----------
+  const renameLevel = (lid: string, title: string) =>
+      setState((s) => ({
+        ...s,
+        levels: s.levels.map((l) => (l.id === lid ? { ...l, title } : l)),
+      }));
+  const deleteLevel = (lid: string) =>
+      setState((s) => ({ ...s, levels: s.levels.filter((l) => l.id !== lid) }));
+  const removeModuleFromSchema = (mid: string) =>
+      setState((s) => ({
+        ...s,
+        levels: s.levels.map((l) => ({
+          ...l,
+          moduleIds: l.moduleIds.filter((x) => x !== mid),
+        })),
+        selectedIds: s.selectedIds.filter((x) => x !== mid),
+      }));
+
+  const dragRef = useRef<{ mid: string; from: string } | null>(null);
+  const onModuleDragStart = (mid: string, from: string) => {
+    dragRef.current = { mid, from };
+  };
+  const onLevelDrop = (toLid: string) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d || d.from === toLid) return;
+    setState((s) => ({
+      ...s,
+      levels: s.levels.map((l) => {
+        if (l.id === d.from)
+          return { ...l, moduleIds: l.moduleIds.filter((x) => x !== d.mid) };
+        if (l.id === toLid)
+          return { ...l, moduleIds: [...l.moduleIds, d.mid] };
+        return l;
+      }),
+    }));
+  };
+
+  // ---------- Чек-листы ----------
+  const toggleCheck = (kind: "resources" | "actions", id: string) =>
+      setState((s) => ({
+        ...s,
+        [kind]: s[kind].map((it) =>
+            it.id === id ? { ...it, checked: !it.checked } : it
+        ),
+      }));
+  const editCheck = (kind: "resources" | "actions", id: string, text: string) =>
+      setState((s) => ({
+        ...s,
+        [kind]: s[kind].map((it) => (it.id === id ? { ...it, text } : it)),
+      }));
+  const deleteCheck = (kind: "resources" | "actions", id: string) =>
+      setState((s) => ({ ...s, [kind]: s[kind].filter((it) => it.id !== id) }));
+  const addCheck = (kind: "resources" | "actions") =>
+      setState((s) => ({
+        ...s,
+        [kind]: [...s[kind], { id: uid(), text: "Новый пункт", checked: false }],
+      }));
+
+  // ---------- Проекты ----------
+  const editProject = (id: string, field: keyof Project, value: string) =>
+      setState((s) => ({
+        ...s,
+        projects: s.projects.map((p) =>
+            p.id === id ? { ...p, [field]: value } : p
+        ),
+      }));
+  const deleteProject = (id: string) =>
+      setState((s) => ({ ...s, projects: s.projects.filter((p) => p.id !== id) }));
+  const addProject = () =>
+      setState((s) => ({
+        ...s,
+        projects: [
+          ...s.projects,
+          {
+            id: "manual_" + uid(),
+            name: "Новый проект",
+            activities: "Описание работ",
+            kpi: "KPI",
+            type: "quick",
+            startQuarter: 0,
+            duration: 2,
+          },
+        ],
+      }));
+
+  // ---------- Гант: перетаскивание и изменение длительности ----------
+  const ganttDrag = (
+      e: ReactMouseEvent,
+      id: string,
+      mode: "move" | "resize"
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const proj = state.projects.find((p) => p.id === id);
+    if (!proj) return;
+    const startX = e.clientX;
+    const origStart = proj.startQuarter;
+    const origDur = proj.duration;
+    const onMove = (me: MouseEvent) => {
+      const delta = Math.round((me.clientX - startX) / QUARTER_WIDTH);
+      setState((s) => ({
+        ...s,
+        projects: s.projects.map((p) => {
+          if (p.id !== id) return p;
+          if (mode === "move") {
+            const ns = Math.max(0, Math.min(11, origStart + delta));
+            return { ...p, startQuarter: ns };
+          }
+          const maxDur = 12 - p.startQuarter;
+          const nd = Math.max(1, Math.min(maxDur, origDur + delta));
+          return { ...p, duration: nd };
+        }),
+      }));
+    };
+    const onUp = () => document.removeEventListener("mousemove", onMove);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp, { once: true });
+  };
+
+  const resetAll = () => {
+    if (confirm("Сбросить весь прогресс и начать заново?")) {
+      localStorage.removeItem(STORAGE_KEY);
+      setState(freshState());
+    }
+  };
+
+  const toggleTheme = () =>
+      patch({ theme: state.theme === "light" ? "dark" : "light" });
+
+  // ---------- Облако (общая копия по коду группы) ----------
+  async function loadCloud() {
+    const code = cloudCode.trim();
+    if (!code) {
+      setCloudStatus("Введите код группы");
+      return;
+    }
+    setCloudStatus("Загрузка…");
+    try {
+      const r = await fetch(`/api/state?code=${encodeURIComponent(code)}`, {
+        cache: "no-store",
+      });
+      if (r.status === 501) {
+        setCloudStatus("Облако не подключено: добавьте хранилище на Vercel (см. README)");
+        return;
+      }
+      const data = await r.json();
+      if (!data || !data.state) {
+        setCloudStatus("В облаке пока нет данных по этому коду");
+        setCloudLinked(true);
+        return;
+      }
+      setState({ ...freshState(), ...data.state });
+      setCloudLinked(true);
+      setCloudStatus("Загружено из облака ✓");
+    } catch {
+      setCloudStatus("Ошибка загрузки");
+    }
+  }
+
+  async function saveCloud(silent = false) {
+    const code = cloudCode.trim();
+    if (!code) {
+      if (!silent) setCloudStatus("Введите код группы");
+      return;
+    }
+    if (!silent) setCloudStatus("Сохранение…");
+    try {
+      const r = await fetch("/api/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, state }),
+      });
+      if (r.status === 501) {
+        setCloudStatus("Облако не подключено: добавьте хранилище на Vercel (см. README)");
+        return;
+      }
+      if (!r.ok) {
+        setCloudStatus("Ошибка сохранения");
+        return;
+      }
+      setCloudLinked(true);
+      setCloudStatus("Сохранено в облако ✓ " + new Date().toLocaleTimeString());
+    } catch {
+      setCloudStatus("Ошибка сохранения");
+    }
+  }
+
+  // Автосохранение в облако после привязки кода (с задержкой)
+  useEffect(() => {
+    if (!hydrated || !cloudLinked || !cloudCode.trim()) return;
+    const t = setTimeout(() => {
+      void saveCloud(true);
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, cloudLinked, cloudCode, hydrated]);
+
+  // ---------- Экспорт / импорт файла (без бэкенда) ----------
+  function exportJSON() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], {
+      type: "application/json",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `samgmu-module2-${state.direction}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setCloudStatus("Файл выгружен ✓");
+  }
+
+  function importJSON(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as Partial<AppState>;
+        setState({ ...freshState(), ...parsed });
+        setCloudStatus("Импортировано из файла ✓");
+      } catch {
+        setCloudStatus("Не удалось прочитать файл");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  const techStack = deriveTechStack(selectedModules);
+
+  // ----- До гидрации: пустой фон, чтобы не было рассинхрона -----
+  if (!hydrated) {
+    return (
+        <div
+            className={`min-h-screen ${
+                state.theme === "dark" ? "bg-slate-950" : "bg-slate-50"
+            }`}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    );
+  }
+
+  const dark = state.theme === "dark";
+
+  // Палитра под фирменный стиль СамГМУ: синий (#0A4DA2) + белый + графит
+  const c = {
+    page: dark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-800",
+    card: dark
+        ? "bg-slate-900 border border-slate-800"
+        : "bg-white border border-slate-200 shadow-sm",
+    heading: dark ? "text-blue-300" : "text-[#0A4DA2]",
+    muted: dark ? "text-slate-400" : "text-slate-500",
+    input: dark
+        ? "bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500"
+        : "bg-white border border-slate-300 text-slate-800 placeholder-slate-400",
+    secondary: dark
+        ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200",
+    chip: dark ? "bg-blue-500/15 text-blue-300" : "bg-[#0A4DA2]/10 text-[#0A4DA2]",
+    subtle: dark
+        ? "bg-slate-800/50 border border-slate-700"
+        : "bg-slate-50 border border-slate-200",
+    tile: dark
+        ? "bg-slate-800/50 border border-slate-700"
+        : "bg-white border border-slate-200",
+    border: dark ? "border-slate-800" : "border-slate-200",
+    grid: dark ? "border-slate-800/60" : "border-slate-100",
+  };
+  const btn =
+      "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50";
+  const primary = "bg-[#0A4DA2] hover:bg-[#073A7A] text-white";
+
+  const steps = [
+    "Контекст",
+    "Конкретизация и схема",
+    "Готовность и проекты",
+    "Дорожная карта",
+    "Итоговый отчёт",
+  ];
+
+  // Полоса Ганта + строки (используется на шаге 4 и в отчёте)
+  const renderGantt = (editable: boolean) => (
+      <div className={`overflow-x-auto rounded-2xl border ${c.border}`}>
+        <div className="grid grid-cols-[240px_repeat(12,80px)]">
+          {/* Заголовок */}
+          <div className={`flex items-center px-3 py-2 text-[11px] font-semibold ${c.muted}`}>
+            Проект
+          </div>
+          {QUARTERS.map((q) => (
+              <div
+                  key={q}
+                  className={`border-l ${c.grid} py-2 text-center text-[11px] font-semibold ${c.muted}`}
+              >
+                {q}
+              </div>
+          ))}
+
+          {state.projects.length === 0 && (
+              <div className={`col-span-full p-4 text-sm ${c.muted}`}>
+                Нет проектов — вернитесь на шаг 3 и нажмите «Предложить проекты».
+              </div>
+          )}
+
+          {state.projects.map((p) => {
+            const start = Math.min(p.startQuarter, 11);
+            const dur = Math.min(p.duration, 12 - start);
+            const end = Math.min(start + dur - 1, 11);
+            const range =
+                dur > 1 ? `${QUARTERS[start]} – ${QUARTERS[end]}` : QUARTERS[start];
+            return (
+                <div key={p.id} className="contents">
+                  <div
+                      className={`relative col-span-full grid grid-cols-[240px_repeat(12,80px)] items-stretch border-t ${c.border}`}
+                      style={{ minHeight: 56 }}
+                  >
+                    <div
+                        className={`flex items-center px-3 py-2 text-sm font-medium leading-snug break-words ${
+                            dark ? "text-slate-100" : "text-slate-800"
+                        }`}
+                    >
+                      {p.name}
+                    </div>
+                    {QUARTERS.map((q, qi) => (
+                        <div key={qi} className={`border-l ${c.grid}`} />
+                    ))}
+                    <div
+                        onMouseDown={
+                          editable ? (e) => ganttDrag(e, p.id, "move") : undefined
+                        }
+                        className={`absolute top-1/2 flex h-8 -translate-y-1/2 items-center overflow-hidden rounded-full px-2 ${
+                            editable ? "cursor-grab" : "cursor-default"
+                        } ${p.type === "quick" ? "bg-[#0A4DA2]" : "bg-violet-600"}`}
+                        style={{ left: 240 + start * 80, width: dur * 80 - 6 }}
+                    >
+                  <span className="truncate text-[11px] font-medium text-white">
+                    {range}
+                  </span>
+                      {editable && (
+                          <span
+                              onMouseDown={(e) => ganttDrag(e, p.id, "resize")}
+                              className="absolute bottom-0 right-0 top-0 w-3.5 cursor-ew-resize rounded-r-full bg-white/25"
+                          />
+                      )}
+                    </div>
+                  </div>
+                </div>
+            );
+          })}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </div>
+  );
+
+  return (
+      <div className={`min-h-screen font-sans ${c.page} print:bg-white print:text-black`}>
+        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+          {/* Шапка */}
+          <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#0A4DA2] text-lg font-extrabold text-white">
+              С
+            </span>
+              <div className="leading-tight">
+                <div className="font-extrabold">ИИ-трансформация СамГМУ</div>
+                <div className={`text-xs ${c.muted}`}>
+                  Модуль 2 · Группа «Образование»
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 print:hidden">
+              <button className={`${btn} ${c.secondary}`} onClick={toggleTheme}>
+                {dark ? "☀️ Светлая" : "🌙 Тёмная"}
+              </button>
+              <button className={`${btn} ${c.secondary}`} onClick={resetAll}>
+                ↺ Сброс
+              </button>
+            </div>
+          </header>
+
+          {/* Прогресс */}
+          <nav className="mb-8 grid grid-cols-5 gap-2 print:hidden">
+            {steps.map((label, i) => {
+              const n = i + 1;
+              const active = state.step >= n;
+              return (
+                  <button
+                      key={n}
+                      onClick={() => goStep(n)}
+                      className="flex flex-col items-center gap-1.5"
+                  >
+                <span
+                    className={`grid h-9 w-9 place-items-center rounded-full text-sm font-bold transition ${
+                        active
+                            ? "bg-[#0A4DA2] text-white shadow-[0_0_0_4px_rgba(10,77,162,0.2)]"
+                            : dark
+                                ? "bg-slate-800 text-slate-400"
+                                : "bg-slate-200 text-slate-500"
+                    }`}
+                >
+                  {n}
+                </span>
+                    <span
+                        className={`text-center text-[11px] leading-tight ${
+                            active ? c.heading : c.muted
+                        }`}
+                    >
+                  {label}
+                </span>
+                  </button>
+              );
+            })}
+          </nav>
+
+          {/* Облачная синхронизация */}
+          <div className={`mb-6 rounded-2xl p-4 ${c.card} print:hidden`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold">☁️ Синхронизация</span>
+              <input
+                  value={cloudCode}
+                  onChange={(e) => setCloudCode(e.target.value)}
+                  placeholder="Код группы (например, education)"
+                  className={`min-w-[150px] flex-1 rounded-xl px-3 py-2 text-sm ${c.input}`}
+              />
+              <button className={`${btn} ${c.secondary}`} onClick={loadCloud}>
+                ↓ Загрузить
+              </button>
+              <button className={`${btn} ${primary}`} onClick={() => saveCloud(false)}>
+                ↑ Сохранить в облако
+              </button>
+              <span className={`mx-1 hidden h-5 w-px sm:inline-block ${dark ? "bg-slate-700" : "bg-slate-300"}`} />
+              <button className={`${btn} ${c.secondary}`} onClick={exportJSON}>
+                ⬇ Файл .json
+              </button>
+              <button
+                  className={`${btn} ${c.secondary}`}
+                  onClick={() => fileInputRef.current?.click()}
+              >
+                ⬆ Из файла
+              </button>
+              <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) importJSON(f);
+                    e.target.value = "";
+                  }}
+              />
+            </div>
+            <div className={`mt-2 text-xs ${c.muted}`}>
+              {cloudStatus ||
+                  "Один код = одна общая копия для всей группы на разных ПК. Локальная копия в этом браузере сохраняется всегда. После «Загрузить»/«Сохранить» изменения уходят в облако автоматически."}
+            </div>
+          </div>
+
+          {/* ШАГ 1 — Контекст */}
+          {state.step === 1 && (
+              <section className={`mb-6 rounded-3xl p-6 sm:p-7 ${c.card}`}>
+                <h2 className={`mb-4 text-xl font-extrabold ${c.heading}`}>
+                  Стратегические установки
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className={c.muted}>Направление</span>
+                    <select
+                        className={`rounded-xl px-3 py-2.5 text-sm ${c.input}`}
+                        value={state.direction}
+                        onChange={(e) => patch({ direction: e.target.value })}
+                    >
+                      <option value="education">🎓 Образование (ИИ-Университет)</option>
+                      <option value="science">🧬 Наука (ИИ-Наука)</option>
+                      <option value="clinic">🏥 Клиника (ИИ-Клиника)</option>
+                      <option value="production">🏭 Инновации и производство</option>
+                      <option value="services">📊 Сервисы и управление</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className={c.muted}>Сценарий трансформации</span>
+                    <select
+                        className={`rounded-xl px-3 py-2.5 text-sm ${c.input}`}
+                        value={state.scenario}
+                        onChange={(e) => patch({ scenario: e.target.value })}
+                    >
+                      <option value="digital_fortress">🛡️ Цифровая крепость</option>
+                      <option value="smart_integrator">🔗 Умный интегратор</option>
+                      <option value="tech_sovereign">⚙️ Технологический суверен</option>
+                      <option value="national_hub">🌍 Национальный хаб</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
+                    <span className={c.muted}>Ключевая инициатива</span>
+                    <textarea
+                        rows={3}
+                        className={`rounded-xl px-3 py-2.5 text-sm ${c.input}`}
+                        value={state.initiative}
+                        onChange={(e) => patch({ initiative: e.target.value })}
+                        placeholder="Опишите ключевую инициативу группы…"
+                    />
+                  </label>
+                </div>
+
+                {state.direction === "education" && (
+                    <details
+                        open
+                        className={`mt-5 rounded-2xl border-l-4 border-l-[#0A4DA2] p-4 ${
+                            dark
+                                ? "border border-slate-800 bg-slate-800/40"
+                                : "border border-slate-200 bg-[#0A4DA2]/5"
+                        }`}
+                    >
+                      <summary
+                          className={`cursor-pointer list-none font-bold [&::-webkit-details-marker]:hidden ${c.heading}`}
+                      >
+                        🎓 Итоги Модуля 1 — группа «Образование» (контекст работы)
+                      </summary>
+                      <div className="mt-3 space-y-2 text-sm leading-relaxed">
+                        <p>
+                          <strong>Сценарий:</strong> {MODULE1.scenario}
+                        </p>
+                        <p>
+                          <strong>Образ будущего:</strong> {MODULE1.vision}
+                        </p>
+                        <p>
+                          <strong>SMART-цель:</strong> {MODULE1.smart}
+                        </p>
+                        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <strong>Дорожная карта</strong>
+                            <ul className="mt-1 list-disc space-y-1 pl-5">
+                              {MODULE1.roadmap.map((x) => (
+                                  <li key={x}>{x}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <strong>Предложения группы (приоритеты)</strong>
+                            <ul className="mt-1 list-disc space-y-1 pl-5">
+                              {MODULE1.proposals.map((x) => (
+                                  <li key={x}>{x}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <strong>Новые роли ППС</strong>
+                            <ul className="mt-1 list-disc space-y-1 pl-5">
+                              {MODULE1.roles.map((x) => (
+                                  <li key={x}>{x}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <strong>Ключевые барьеры</strong>
+                            <ul className="mt-1 list-disc space-y-1 pl-5">
+                              {MODULE1.barriers.map((x) => (
+                                  <li key={x}>{x}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                        <p className={`mt-2 text-xs ${c.muted}`}>
+                          Источник: презентация «Результаты групп · Модуль 1».
+                        </p>
+                      </div>
+                    </details>
+                )}
+
+                <div className="mt-5 flex justify-end">
+                  <button className={`${btn} ${primary}`} onClick={startFromContext}>
+                    Далее →
+                  </button>
+                </div>
+              </section>
+          )}
+
+          {/* ШАГ 2 — Конкретизация и схема */}
+          {state.step === 2 && (
+              <section className={`mb-6 rounded-3xl p-6 sm:p-7 ${c.card}`}>
+                <h2 className={`mb-2 text-xl font-extrabold ${c.heading}`}>
+                  Конкретизация инициативы → элементы образа будущего
+                </h2>
+                <p className={`mb-4 text-sm ${c.muted}`}>
+                  Выбрано: {state.selectedIds.length} из {state.modules.length}.
+                  Отметьте элементы, которые раскрывают вашу инициативу.
+                </p>
+                <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+                  <div className="grid max-h-[520px] gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
+                    {state.modules.map((m) => {
+                      const on = state.selectedIds.includes(m.id);
+                      return (
+                          <label
+                              key={m.id}
+                              className={`flex cursor-pointer items-start gap-3 rounded-2xl p-3 transition ${
+                                  on
+                                      ? `ring-2 ring-[#0A4DA2] ${
+                                          dark ? "bg-slate-800" : "bg-[#0A4DA2]/5"
+                                      }`
+                                      : c.tile
+                              }`}
+                          >
+                            <input
+                                type="checkbox"
+                                className="mt-0.5 h-4 w-4 accent-[#0A4DA2]"
+                                checked={on}
+                                onChange={() => toggleModule(m.id)}
+                            />
+                            <div>
+                              <div className="text-sm font-semibold">{m.name}</div>
+                              <div className={`text-xs ${c.muted}`}>{m.desc}</div>
+                            </div>
+                          </label>
+                      );
+                    })}
+                  </div>
+                  <div className={`h-fit rounded-2xl p-4 ${c.subtle}`}>
+                    <h3 className="mb-2 text-sm font-bold">➕ Добавить свой элемент</h3>
+                    <input
+                        className={`mb-2 w-full rounded-xl px-3 py-2 text-sm ${c.input}`}
+                        placeholder="Название"
+                        value={customName}
+                        onChange={(e) => setCustomName(e.target.value)}
+                    />
+                    <textarea
+                        rows={3}
+                        className={`mb-2 w-full rounded-xl px-3 py-2 text-sm ${c.input}`}
+                        placeholder="Описание"
+                        value={customDesc}
+                        onChange={(e) => setCustomDesc(e.target.value)}
+                    />
+                    <button
+                        className={`${btn} w-full ${c.secondary}`}
+                        onClick={addCustomModule}
+                    >
+                      Добавить
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button className={`${btn} ${c.secondary}`} onClick={() => goStep(1)}>
+                      ← Назад
+                    </button>
+                    <button
+                        className={`${btn} bg-violet-600 text-white hover:bg-violet-700`}
+                        onClick={buildSchema}
+                    >
+                      🧱 Собрать схему
+                    </button>
+                  </div>
+                  <button className={`${btn} ${primary}`} onClick={goReadiness}>
+                    К анализу готовности →
+                  </button>
+                </div>
+
+                {state.levels.length > 0 && (
+                    <div
+                        className={`mt-7 rounded-3xl p-5 ${
+                            dark
+                                ? "border border-slate-800 bg-slate-900"
+                                : "border border-slate-200 bg-slate-50"
+                        }`}
+                    >
+                      <div
+                          className={`mb-5 rounded-2xl border-l-4 border-l-[#0A4DA2] p-4 ${
+                              dark ? "bg-blue-500/10" : "bg-[#0A4DA2]/5"
+                          }`}
+                      >
+                        <div className="font-extrabold">🎯 Стратегический контекст</div>
+                        <div className={`text-sm ${c.muted}`}>
+                          Сценарий: {scenarioMap[state.scenario]?.label} · Инициатива:{" "}
+                          {state.initiative
+                              ? state.initiative.slice(0, 90) + "…"
+                              : "не указана"}
+                        </div>
+                      </div>
+
+                      {state.levels.map((lvl, i) => (
+                          <div key={lvl.id}>
+                            <div
+                                className={`rounded-2xl p-4 ${c.tile}`}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={() => onLevelDrop(lvl.id)}
+                            >
+                              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                <div
+                                    className="flex-1 border-l-4 border-l-[#0A4DA2] pl-2.5 font-extrabold outline-none"
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) =>
+                                        renameLevel(lvl.id, e.currentTarget.textContent || "")
+                                    }
+                                >
+                                  {lvl.title}
+                                </div>
+                                <button
+                                    className="rounded-full bg-red-500/15 px-3 py-1 text-xs text-red-500 hover:bg-red-500/25"
+                                    onClick={() => deleteLevel(lvl.id)}
+                                >
+                                  🗑 удалить слой
+                                </button>
+                              </div>
+                              <div className="flex min-h-[60px] flex-wrap gap-2.5">
+                                {lvl.moduleIds.length === 0 && (
+                                    <div className={`p-2 text-xs italic ${c.muted}`}>
+                                      перетащите сюда элементы
+                                    </div>
+                                )}
+                                {lvl.moduleIds.map((mid) => {
+                                  const m = moduleById(mid);
+                                  if (!m) return null;
+                                  return (
+                                      <div
+                                          key={mid}
+                                          draggable
+                                          onDragStart={() => onModuleDragStart(mid, lvl.id)}
+                                          className={`relative min-w-[180px] flex-1 cursor-grab rounded-xl p-3 ${
+                                              dark
+                                                  ? "border border-slate-700 bg-slate-800"
+                                                  : "border border-slate-200 bg-white shadow-sm"
+                                          }`}
+                                      >
+                                        <div className="pr-5 text-xs font-extrabold">
+                                          {m.name}
+                                        </div>
+                                        <div className={`text-[11px] ${c.muted}`}>
+                                          {m.desc.slice(0, 70)}
+                                        </div>
+                                        <button
+                                            className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-red-500/20 text-xs text-red-500 hover:bg-red-500/30"
+                                            onClick={() => removeModuleFromSchema(mid)}
+                                            title="Убрать"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            {i < state.levels.length - 1 && (
+                                <div className={`my-1.5 text-center text-xs ${c.heading}`}>
+                                  ↓ поток данных / событий
+                                </div>
+                            )}
+                          </div>
+                      ))}
+
+                      <div
+                          className={`mt-4 rounded-2xl p-4 ${
+                              dark ? "bg-black/30" : "border border-slate-200 bg-white"
+                          }`}
+                      >
+                        <h4 className="mb-1 font-bold">🔬 Технологический стек</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {techStack.map((t) => (
+                              <span
+                                  key={t}
+                                  className={`rounded-full px-3 py-1 text-xs ${c.chip}`}
+                              >
+                        {t}
+                      </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                )}
+              </section>
+          )}
+
+          {/* ШАГ 3 — Готовность и проекты */}
+          {state.step === 3 && (
+              <section className={`mb-6 rounded-3xl p-6 sm:p-7 ${c.card}`}>
+                <h2 className={`mb-4 text-xl font-extrabold ${c.heading}`}>
+                  Анализ готовности → проекты
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {(["resources", "actions"] as const).map((kind) => (
+                      <div key={kind}>
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-bold">
+                            {kind === "resources"
+                                ? "🧰 Необходимые ресурсы"
+                                : "✅ Необходимые действия"}
+                          </h3>
+                          <button
+                              className={`rounded-full px-3 py-1 text-xs ${c.chip}`}
+                              onClick={() => addCheck(kind)}
+                          >
+                            + пункт
+                          </button>
+                        </div>
+                        {state[kind].map((it) => (
+                            <div
+                                key={it.id}
+                                className={`mb-2 flex items-center gap-2 rounded-xl px-3 py-2 ${c.tile}`}
+                            >
+                              <input
+                                  type="checkbox"
+                                  className="h-4 w-4 accent-[#0A4DA2]"
+                                  checked={it.checked}
+                                  onChange={() => toggleCheck(kind, it.id)}
+                              />
+                              <input
+                                  className={`flex-1 bg-transparent text-sm outline-none ${
+                                      dark ? "text-slate-100" : "text-slate-800"
+                                  }`}
+                                  value={it.text}
+                                  onChange={(e) => editCheck(kind, it.id, e.target.value)}
+                              />
+                              <button
+                                  className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-500/20 text-xs text-red-500 hover:bg-red-500/30"
+                                  onClick={() => deleteCheck(kind, it.id)}
+                              >
+                                ×
+                              </button>
+                            </div>
+                        ))}
+                      </div>
+                  ))}
+                </div>
+
+                <div className="mt-4">
+                  <button className={`${btn} ${primary}`} onClick={makeProjects}>
+                    🚀 Предложить проекты
+                  </button>
+                </div>
+
+                {state.projects.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="mb-3 font-bold">
+                        📦 Пул проектов (быстрые / стратегические)
+                      </h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {state.projects.map((p) => (
+                            <div
+                                key={p.id}
+                                className={`relative flex flex-col gap-2 rounded-2xl p-4 ${c.tile} border-l-4 ${
+                                    p.type === "quick"
+                                        ? "border-l-[#0A4DA2]"
+                                        : "border-l-violet-500"
+                                }`}
+                            >
+                              <button
+                                  className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-red-500/20 text-red-500 hover:bg-red-500/30"
+                                  onClick={() => deleteProject(p.id)}
+                              >
+                                ×
+                              </button>
+                              <select
+                                  className={`w-fit rounded-md px-2 py-1 text-xs ${c.input}`}
+                                  value={p.type}
+                                  onChange={(e) => editProject(p.id, "type", e.target.value)}
+                              >
+                                <option value="quick">Быстрый</option>
+                                <option value="strategic">Стратегический</option>
+                              </select>
+                              <input
+                                  className={`rounded-lg px-2 py-1.5 text-sm font-bold ${c.input}`}
+                                  value={p.name}
+                                  onChange={(e) => editProject(p.id, "name", e.target.value)}
+                              />
+                              <textarea
+                                  rows={2}
+                                  className={`rounded-lg px-2 py-1.5 text-sm ${c.input}`}
+                                  value={p.activities}
+                                  onChange={(e) =>
+                                      editProject(p.id, "activities", e.target.value)
+                                  }
+                              />
+                              <input
+                                  className={`rounded-lg px-2 py-1.5 text-xs ${c.input}`}
+                                  value={p.kpi}
+                                  onChange={(e) => editProject(p.id, "kpi", e.target.value)}
+                              />
+                            </div>
+                        ))}
+                      </div>
+                      <button
+                          className={`${btn} mt-4 ${c.secondary}`}
+                          onClick={addProject}
+                      >
+                        + Добавить проект вручную
+                      </button>
+                    </div>
+                )}
+
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                  <button className={`${btn} ${c.secondary}`} onClick={() => goStep(2)}>
+                    ← К элементам
+                  </button>
+                  <button
+                      className={`${btn} ${primary}`}
+                      onClick={() => {
+                        if (state.projects.length === 0) makeProjects();
+                        goStep(4);
+                      }}
+                  >
+                    К дорожной карте →
+                  </button>
+                </div>
+              </section>
+          )}
+
+          {/* ШАГ 4 — Дорожная карта */}
+          {state.step === 4 && (
+              <section className={`mb-6 rounded-3xl p-6 sm:p-7 ${c.card}`}>
+                <h2 className={`mb-2 text-xl font-extrabold ${c.heading}`}>
+                  Дорожная карта (диаграмма Ганта)
+                </h2>
+                <p className={`mb-4 text-sm ${c.muted}`}>
+                  Перетаскивайте полосы, чтобы менять сроки; тяните за правый край,
+                  чтобы менять длительность. Полные названия проектов — в левой
+                  колонке.
+                </p>
+                {renderGantt(true)}
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                  <button className={`${btn} ${c.secondary}`} onClick={() => goStep(3)}>
+                    ← К проектам
+                  </button>
+                  <button className={`${btn} ${primary}`} onClick={() => goStep(5)}>
+                    К итоговому отчёту →
+                  </button>
+                </div>
+              </section>
+          )}
+
+          {/* ШАГ 5 — Итоговый отчёт */}
+          {state.step === 5 && (
+              <section
+                  id="report-section"
+                  className={`mb-6 rounded-3xl p-6 sm:p-7 ${c.card}`}
+              >
+                <h2 className={`mb-4 text-xl font-extrabold ${c.heading}`}>
+                  Итоговый отчёт группы
+                </h2>
+                <div className="space-y-6">
+                  <div className={`border-b border-dashed ${c.border} pb-5`}>
+                    <h3 className={`mb-2 font-bold ${c.heading}`}>Контекст</h3>
+                    <p className="text-sm leading-relaxed">
+                      <strong>Направление:</strong>{" "}
+                      {directionsMap[state.direction]?.name}
+                      <br />
+                      <strong>Сценарий:</strong> {scenarioMap[state.scenario]?.label} (
+                      {scenarioMap[state.scenario]?.focus})
+                      <br />
+                      <strong>Ключевая инициатива:</strong> {state.initiative}
+                    </p>
+                  </div>
+
+                  <div className={`border-b border-dashed ${c.border} pb-5`}>
+                    <h3 className={`mb-2 font-bold ${c.heading}`}>
+                      Схема образа будущего
+                    </h3>
+                    {state.levels.length === 0 && (
+                        <p className={`text-sm ${c.muted}`}>
+                          Схема ещё не собрана (шаг 2).
+                        </p>
+                    )}
+                    {state.levels.map((lvl) => (
+                        <div key={lvl.id} className="mb-1 text-sm">
+                          <strong>{lvl.title}:</strong>{" "}
+                          {lvl.moduleIds
+                              .map((id) => moduleById(id)?.name)
+                              .filter(Boolean)
+                              .join(", ") || "—"}
+                        </div>
+                    ))}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {techStack.map((t) => (
+                          <span
+                              key={t}
+                              className={`rounded-full px-3 py-1 text-xs ${c.chip}`}
+                          >
+                      {t}
+                    </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className={`border-b border-dashed ${c.border} pb-5`}>
+                    <h3 className={`mb-2 font-bold ${c.heading}`}>Готовность</h3>
+                    <div className="grid gap-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <strong>Ресурсы</strong>
+                        <ul className="mt-1 space-y-1">
+                          {state.resources.map((r) => (
+                              <li key={r.id}>
+                                {r.checked ? "✅" : "⬜"} {r.text}
+                              </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <strong>Действия</strong>
+                        <ul className="mt-1 space-y-1">
+                          {state.actions.map((a) => (
+                              <li key={a.id}>
+                                {a.checked ? "✅" : "⬜"} {a.text}
+                              </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`border-b border-dashed ${c.border} pb-5`}>
+                    <h3 className={`mb-2 font-bold ${c.heading}`}>Проекты</h3>
+                    <div className="grid gap-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <strong>Быстрые</strong>
+                        <ul className="mt-1 space-y-1">
+                          {state.projects
+                              .filter((p) => p.type === "quick")
+                              .map((p) => (
+                                  <li key={p.id}>
+                                    {p.name} — {p.kpi}
+                                  </li>
+                              ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <strong>Стратегические</strong>
+                        <ul className="mt-1 space-y-1">
+                          {state.projects
+                              .filter((p) => p.type === "strategic")
+                              .map((p) => (
+                                  <li key={p.id}>
+                                    {p.name} — {p.kpi}
+                                  </li>
+                              ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className={`mb-2 font-bold ${c.heading}`}>Дорожная карта</h3>
+                    {renderGantt(false)}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-between gap-3 print:hidden">
+                  <button className={`${btn} ${c.secondary}`} onClick={() => goStep(4)}>
+                    ← К дорожной карте
+                  </button>
+                  <button
+                      className={`${btn} ${primary}`}
+                      onClick={() => window.print()}
+                  >
+                    ⬇ Сохранить отчёт (PDF / печать)
+                  </button>
+                </div>
+              </section>
+          )}
+
+          <footer className={`mt-8 text-center text-xs ${c.muted} print:hidden`}>
+            Конструктор ИИ-трансформации · Модуль 2 · СамГМУ 2026 · данные хранятся
+            в этом браузере (localStorage)
+          </footer>
         </div>
-      </main>
-    </div>
+      </div>
   );
 }
