@@ -1448,7 +1448,7 @@ export default function Home() {
             </div>
             <div className="flex gap-2 print:hidden">
               <button className={`${btn} ${c.secondary}`} onClick={() => setShowModel(true)}>
-                📊 Модель ассистента
+                📊 Социальная сеть ИИ-агентов
               </button>
               <button className={`${btn} ${c.secondary}`} onClick={toggleTheme}>
                 {dark ? "☀️ Светлая" : "🌙 Тёмная"}
@@ -2510,7 +2510,7 @@ export default function Home() {
                   ×
                 </button>
                 <img
-                    src="/model.svg"
+                    src="/model.png"
                     alt="Модель поведения интеллектуального ассистента"
                     className="h-auto w-full"
                 />
