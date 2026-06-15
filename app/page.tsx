@@ -753,6 +753,22 @@ const INTERNAL_RESOURCES: string[] = [
   "Подсистема этического контроля ИИ",
 ];
 
+// Внешние программно-аппаратные ресурсы (аренда облака — под агентов/инференс, дешевле)
+const EXTERNAL_HARDWARE: string[] = [
+  "Облачный GPU-инстанс: 1× NVIDIA A100 80GB, 16 vCPU, 128 ГБ RAM — инференс агентов · от ~150 тыс ₽/мес",
+  "Облачный сервер: 1–2× NVIDIA H100 80GB, NVMe — RAG и продакшн-агенты · ~250–500 тыс ₽/мес (H100 от ~250 ₽/час)",
+  "Почасовой облачный кластер на пиковые задачи (Cloud.ru / Selectel / T1) · оплата по факту, без CAPEX",
+];
+
+// Внутренние программно-аппаратные ресурсы (свои серверы — под обучение нейросетей, дороже)
+const INTERNAL_HARDWARE: string[] = [
+  "AI-сервер обучения NVIDIA DGX H100: 8× H100 SXM 80GB (640 ГБ HBM3), 2× Xeon Platinum 8480C (112 ядер), 2 ТБ DDR5 · ~25–40 млн ₽",
+  "Бюджетнее: платформа 8× H100 80GB (Gigabyte), 2× Xeon Scalable, DDR5, NVMe · ~12–18 млн ₽",
+  "Узел хранения Data Lake: all-flash NVMe, 100+ ТБ · ~3–6 млн ₽",
+  "Сетевая фабрика InfiniBand 400G (NVLink/NVSwitch) для кластера · в составе платформы",
+  "Защищённый ЦОД-контур: СКЗИ, физическая изоляция для ПДн (152-ФЗ) · CAPEX",
+];
+
 // Курируемая дорожная карта группы «Образование» по этапам ТЗ (6.1–6.3).
 // Шкала: 12 полугодий 2026–2031. start — индекс полугодия (0..11), dur — длительность.
 const EDU_ROADMAP: Omit<Project, "id">[] = [
@@ -883,6 +899,12 @@ export default function Home() {
     if (hydrated) localStorage.setItem("samgmu_cloud_code", cloudCode);
   }, [cloudCode, hydrated]);
 
+  // Скролл наверх при переключении раздела
+  useEffect(() => {
+    if (typeof window !== "undefined")
+      window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [state.step]);
+
   const patch = useCallback(
       (p: Partial<AppState>) => setState((s) => ({ ...s, ...p })),
       []
@@ -1000,6 +1022,7 @@ export default function Home() {
   const [fHorizon, setFHorizon] = useState("all");
   const [fSourcing, setFSourcing] = useState("all");
   const [fTier, setFTier] = useState("all");
+  const [showModel, setShowModel] = useState(false);
   const addCustomModule = () => {
     const name = customName.trim();
     if (!name) return;
@@ -1424,6 +1447,9 @@ export default function Home() {
               </div>
             </div>
             <div className="flex gap-2 print:hidden">
+              <button className={`${btn} ${c.secondary}`} onClick={() => setShowModel(true)}>
+                📊 Модель ассистента
+              </button>
               <button className={`${btn} ${c.secondary}`} onClick={toggleTheme}>
                 {dark ? "☀️ Светлая" : "🌙 Тёмная"}
               </button>
@@ -2070,7 +2096,7 @@ export default function Home() {
 
                         <div>
                           <h4 className="mb-1.5 font-bold">
-                            🌐 Внешние программно-аппаратные ресурсы{" "}
+                            🌐 Внешние продукты{" "}
                             <span className={`text-xs font-normal ${c.muted}`}>
                         (интегрируем)
                       </span>
@@ -2107,13 +2133,57 @@ export default function Home() {
 
                         <div>
                           <h4 className="mb-1.5 font-bold">
-                            🏛 Внутренние программно-аппаратные ресурсы{" "}
+                            🏛 Внутренние продукты{" "}
                             <span className={`text-xs font-normal ${c.muted}`}>
                         (делаем сами)
                       </span>
                           </h4>
                           <div className="flex flex-wrap gap-2">
                             {INTERNAL_RESOURCES.map((r) => (
+                                <span
+                                    key={r}
+                                    className={`rounded-full px-3 py-1 text-xs ${flagCls(
+                                        "sourcing",
+                                        "self"
+                                    )}`}
+                                >
+                          {r}
+                        </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="mb-1.5 font-bold">
+                            🖥 Внешние программно-аппаратные ресурсы{" "}
+                            <span className={`text-xs font-normal ${c.muted}`}>
+                        (аренда облака — под агентов, дешевле)
+                      </span>
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {EXTERNAL_HARDWARE.map((r) => (
+                                <span
+                                    key={r}
+                                    className={`rounded-full px-3 py-1 text-xs ${flagCls(
+                                        "sourcing",
+                                        "integrate"
+                                    )}`}
+                                >
+                          {r}
+                        </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="mb-1.5 font-bold">
+                            🗄 Внутренние программно-аппаратные ресурсы{" "}
+                            <span className={`text-xs font-normal ${c.muted}`}>
+                        (свои серверы — под обучение нейросетей, дороже)
+                      </span>
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {INTERNAL_HARDWARE.map((r) => (
                                 <span
                                     key={r}
                                     className={`rounded-full px-3 py-1 text-xs ${flagCls(
@@ -2423,6 +2493,30 @@ export default function Home() {
             в этом браузере (localStorage)
           </footer>
         </div>
+
+        {showModel && (
+            <div
+                onClick={() => setShowModel(false)}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden"
+            >
+              <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="relative max-h-[92vh] w-full max-w-6xl overflow-auto rounded-2xl bg-white p-3 shadow-2xl"
+              >
+                <button
+                    onClick={() => setShowModel(false)}
+                    className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300"
+                >
+                  ×
+                </button>
+                <img
+                    src="/model.svg"
+                    alt="Модель поведения интеллектуального ассистента"
+                    className="h-auto w-full"
+                />
+              </div>
+            </div>
+        )}
       </div>
   );
 }
