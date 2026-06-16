@@ -7,6 +7,8 @@ import {
   useCallback,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { ProjectProfileModal, type ProfileProject } from "./projectProfiles";
+import { GroupProjectProfile } from "./groupProfile";
 
 /* ============================================================
    Конструктор ИИ-трансформации СамГМУ — Модуль 2 (группа «Образование»)
@@ -1023,6 +1025,9 @@ export default function Home() {
   const [fSourcing, setFSourcing] = useState("all");
   const [fTier, setFTier] = useState("all");
   const [showModel, setShowModel] = useState(false);
+  const [profileProject, setProfileProject] = useState<ProfileProject | null>(
+      null
+  );
   const addCustomModule = () => {
     const name = customName.trim();
     if (!name) return;
@@ -1446,7 +1451,12 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2 print:hidden">
+            <div className="flex flex-wrap items-center gap-2 print:hidden">
+              <input
+                  type="text"
+                  placeholder="🔑 API-ключ (необязательно)"
+                  className={`w-44 rounded-full px-3 py-2 text-sm sm:w-52 ${c.input}`}
+              />
               <button className={`${btn} ${c.secondary}`} onClick={() => setShowModel(true)}>
                 📊 Социальная сеть ИИ-агентов
               </button>
@@ -2307,6 +2317,12 @@ export default function Home() {
                                   value={p.kpi}
                                   onChange={(e) => editProject(p.id, "kpi", e.target.value)}
                               />
+                              <button
+                                  onClick={() => setProfileProject(p)}
+                                  className={`mt-1 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${primary}`}
+                              >
+                                📋 Профиль проекта
+                              </button>
                             </div>
                         ))}
                       </div>
@@ -2472,6 +2488,8 @@ export default function Home() {
                     <h3 className={`mb-2 font-bold ${c.heading}`}>Дорожная карта</h3>
                     {renderGantt(false)}
                   </div>
+
+                  <GroupProjectProfile dark={dark} />
                 </div>
 
                 <div className="mt-6 flex justify-between gap-3 print:hidden">
@@ -2516,6 +2534,13 @@ export default function Home() {
                 />
               </div>
             </div>
+        )}
+        {profileProject && (
+            <ProjectProfileModal
+                project={profileProject}
+                dark={dark}
+                onClose={() => setProfileProject(null)}
+            />
         )}
       </div>
   );
