@@ -1399,9 +1399,10 @@ export default function Home() {
                       style={{ minHeight: 56 }}
                   >
                     <div
-                        className={`flex items-center px-3 py-2 text-sm font-medium leading-snug break-words ${
+                        className={`flex items-center px-3 py-2 text-sm font-medium leading-snug break-words cursor-pointer ${
                             dark ? "text-slate-100" : "text-slate-800"
                         }`}
+                        onClick={() => setProfileProject(p)}
                     >
                       {p.name}
                     </div>
@@ -1441,9 +1442,11 @@ export default function Home() {
           {/* Шапка */}
           <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#0A4DA2] text-lg font-extrabold text-white">
-              С
-            </span>
+              <img
+                  src="/samgmu.jpg"
+                  alt="СамГМУ"
+                  className="h-11 w-11 rounded-xl bg-white object-contain p-0.5"
+              />
               <div className="leading-tight">
                 <div className="font-extrabold">ИИ-трансформация СамГМУ</div>
                 <div className={`text-xs ${c.muted}`}>
@@ -2206,6 +2209,12 @@ export default function Home() {
                             ))}
                           </div>
                         </div>
+                      </div>
+
+                      <div className="mt-5 flex justify-end">
+                        <button className={`${btn} ${primary}`} onClick={goReadiness}>
+                          К анализу готовности →
+                        </button>
                       </div>
                     </div>
                 )}
